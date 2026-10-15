@@ -1,0 +1,79 @@
+# Render Blueprint: deploys all THREE microservices as independent web services.
+# Render dashboard -> New -> Blueprint -> pick this repo. Fill the env vars marked sync:false.
+# (You can also create the two services by hand; see docs/DEPLOYMENT.md.)
+services:
+  - type: web
+    name: rentbook-user-service
+    runtime: node
+    rootDir: user-service
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: DB_NAME
+        value: rentbook_users
+      - key: JWT_SECRET
+        sync: false
+      - key: SERVICE_KEY
+        sync: false
+      - key: BILLING_SERVICE_URL
+        sync: false
+      - key: CLIENT_ORIGIN
+        sync: false
+
+  - type: web
+    name: rentbook-billing-service
+    runtime: node
+    rootDir: billing-service
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: DB_NAME
+        value: rentbook_billing
+      - key: JWT_SECRET
+        sync: false
+      - key: SERVICE_KEY
+        sync: false
+      - key: USER_SERVICE_URL
+        sync: false
+      - key: NOTIFICATION_SERVICE_URL
+        sync: false
+      - key: CLIENT_ORIGIN
+        sync: false
+
+  - type: web
+    name: rentbook-notification-service
+    runtime: node
+    rootDir: notification-service
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: DB_NAME
+        value: rentbook_notifications
+      - key: JWT_SECRET
+        sync: false
+      - key: SERVICE_KEY
+        sync: false
+      - key: USER_SERVICE_URL
+        sync: false
+      - key: BILLING_SERVICE_URL
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_BOT_USERNAME
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
+      - key: CLIENT_ORIGIN
+        sync: false

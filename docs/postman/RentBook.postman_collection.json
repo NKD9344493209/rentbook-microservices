@@ -1,0 +1,2942 @@
+{
+  "info": {
+    "name": "RentBook Microservices API",
+    "description": "End-to-end tests for user-service, billing-service and notification-service. Pick an environment (Local or Deployed) and use Run collection. Every run creates fresh accounts, so it can be run any number of times.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. Health & service-to-service connectivity",
+      "description": "Run these first. On Render free tier the first call can take ~50s while a service wakes up.",
+      "item": [
+        {
+          "name": "user-service health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{userUrl}}/api/health",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('run', Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"served by user-service\", () => { pm.expect(pm.response.json().service).to.eql('user-service'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "billing-service health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{billingUrl}}/api/health",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"served by billing-service\", () => { pm.expect(pm.response.json().service).to.eql('billing-service'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "billing-service \u2192 user-service reachable",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{billingUrl}}/api/health/dependencies",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "health",
+                "dependencies"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"user-service reachable from billing-service\", () => { pm.expect(pm.response.json().reachable).to.be.true; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "user-service \u2192 billing-service reachable",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{userUrl}}/api/health/dependencies",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "health",
+                "dependencies"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"billing-service reachable from user-service\", () => { pm.expect(pm.response.json().reachable).to.be.true; });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Auth (user-service)",
+      "item": [
+        {
+          "name": "Register owner",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/auth/register",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ravi Kumar\",\n  \"email\": \"owner{{run}}@rentbook.in\",\n  \"password\": \"123456\",\n  \"role\": \"owner\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test(\"returns a JWT\", () => { pm.expect(pm.response.json().token).to.be.a('string'); });",
+                  "pm.collectionVariables.set('ownerToken', pm.response.json().token);",
+                  "pm.collectionVariables.set('ownerId', pm.response.json().user._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register tenant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/auth/register",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nila S\",\n  \"email\": \"tenant{{run}}@rentbook.in\",\n  \"password\": \"123456\",\n  \"role\": \"tenant\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('tenantToken', pm.response.json().token);",
+                  "pm.collectionVariables.set('tenantId', pm.response.json().user._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register as admin is downgraded to tenant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/auth/register",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sneaky\",\n  \"email\": \"admin{{run}}@rentbook.in\",\n  \"password\": \"123456\",\n  \"role\": \"admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test(\"role forced to tenant\", () => { pm.expect(pm.response.json().user.role).to.eql('tenant'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register duplicate email \u2192 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/auth/register",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ravi Again\",\n  \"email\": \"owner{{run}}@rentbook.in\",\n  \"password\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register missing fields \u2192 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/auth/register",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"x{{run}}@rentbook.in\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login owner",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/auth/login",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"owner{{run}}@rentbook.in\",\n  \"password\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('ownerToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login wrong password \u2192 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/auth/login",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"owner{{run}}@rentbook.in\",\n  \"password\": \"wrong-pass\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get current user (me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/auth/me",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"no password in response\", () => { pm.expect(pm.response.json()).to.not.have.property('password'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Protected route without token \u2192 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{userUrl}}/api/auth/me",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Properties CRUD (user-service)",
+      "item": [
+        {
+          "name": "Create property",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/properties",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sunrise PG\",\n  \"address\": \"Peelamedu, Coimbatore\",\n  \"rooms\": 12,\n  \"occupied\": 9,\n  \"monthlyRent\": 6500\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('propertyId', pm.response.json()._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create property \u2013 missing fields \u2192 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/properties",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Half filled\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List my properties",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/properties",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"at least one property\", () => { pm.expect(pm.response.json().length).to.be.above(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get property by id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/properties/{{propertyId}}",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update property",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/properties/{{propertyId}}",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"occupied\": 10,\n  \"monthlyRent\": 7000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"rent updated\", () => { pm.expect(pm.response.json().monthlyRent).to.eql(7000); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update \u2013 occupied > rooms \u2192 400",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/properties/{{propertyId}}",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"occupied\": 50\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update \u2013 cannot change owner",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/properties/{{propertyId}}",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"owner\": \"{{tenantId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"owner unchanged\", () => { pm.expect(pm.response.json().owner).to.eql(pm.collectionVariables.get('ownerId')); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tenant cannot manage properties \u2192 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/properties",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List tenants (for bill form)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/users/tenants",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "tenants"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"new tenant is listed\", () => { pm.expect(pm.response.json().map(t => t._id)).to.include(pm.collectionVariables.get('tenantId')); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Bills (billing-service \u21c4 user-service)",
+      "description": "Creating a bill makes billing-service call user-service to validate the tenant and the property.",
+      "item": [
+        {
+          "name": "Issue bill (validated via user-service)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant\": \"{{tenantId}}\",\n  \"property\": \"{{propertyId}}\",\n  \"room\": \"204\",\n  \"month\": \"2026-10\",\n  \"rent\": 7000,\n  \"electricity\": 640,\n  \"water\": 250,\n  \"internet\": 500,\n  \"dueDate\": \"2026-10-15\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('billId', pm.response.json()._id);",
+                  "pm.test(\"tenant name came from user-service\", () => { pm.expect(pm.response.json().tenant.name).to.eql('Nila S'); });",
+                  "pm.test(\"total is computed\", () => { pm.expect(pm.response.json().total).to.eql(8390); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Issue bill to unknown tenant \u2192 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant\": \"000000000000000000000000\",\n  \"month\": \"2026-10\",\n  \"rent\": 5000,\n  \"dueDate\": \"2026-10-15\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Issue bill to an owner account \u2192 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant\": \"{{ownerId}}\",\n  \"month\": \"2026-10\",\n  \"rent\": 5000,\n  \"dueDate\": \"2026-10-15\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Issue duplicate bill (same tenant + month) \u2192 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant\": \"{{tenantId}}\",\n  \"property\": \"{{propertyId}}\",\n  \"month\": \"2026-10\",\n  \"rent\": 7000,\n  \"dueDate\": \"2026-10-15\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Issue bill \u2013 bad month format \u2192 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant\": \"{{tenantId}}\",\n  \"month\": \"October\",\n  \"rent\": 7000,\n  \"dueDate\": \"2026-10-15\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner lists bills (names enriched from user-service)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"tenant object attached\", () => { pm.expect(pm.response.json()[0].tenant).to.have.property('name'); });",
+                  "pm.test(\"property object attached\", () => { pm.expect(pm.response.json()[0].property).to.have.property('name'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get bill by id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills/{{billId}}",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                "{{billId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update pending bill",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills/{{billId}}",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                "{{billId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"electricity\": 700\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"total recalculated\", () => { pm.expect(pm.response.json().total).to.eql(8450); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tenant lists own bills",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"sees own bill\", () => { pm.expect(pm.response.json().length).to.eql(1); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tenant cannot issue bills \u2192 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant\": \"{{tenantId}}\",\n  \"month\": \"2026-11\",\n  \"rent\": 1,\n  \"dueDate\": \"2026-11-15\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tenant pays bill",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills/{{billId}}/pay",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                "{{billId}}",
+                "pay"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"marked paid\", () => { pm.expect(pm.response.json().status).to.eql('paid'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pay same bill again \u2192 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills/{{billId}}/pay",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                "{{billId}}",
+                "pay"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete a paid bill \u2192 409",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills/{{billId}}",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                "{{billId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Issue November bill (stays pending)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenant\": \"{{tenantId}}\",\n  \"property\": \"{{propertyId}}\",\n  \"room\": \"204\",\n  \"month\": \"2026-11\",\n  \"rent\": 7000,\n  \"electricity\": 500,\n  \"dueDate\": \"2026-11-15\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('bill2Id', pm.response.json()._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bills without token \u2192 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Complaints (billing-service)",
+      "item": [
+        {
+          "name": "Tenant raises complaint (owner auto-linked)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/complaints",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Water leakage\",\n  \"description\": \"Kitchen sink drips all night.\",\n  \"priority\": \"high\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('complaintId', pm.response.json()._id);",
+                  "pm.test(\"routed to the owner who billed this tenant\", () => { pm.expect(pm.response.json().owner).to.eql(pm.collectionVariables.get('ownerId')); });",
+                  "pm.test(\"room taken from latest bill\", () => { pm.expect(pm.response.json().room).to.eql('204'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Complaint missing description \u2192 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/complaints",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Fan\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner lists complaints (tenant name from user-service)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/complaints",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"tenant name attached\", () => { pm.expect(pm.response.json()[0].tenant.name).to.eql('Nila S'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner starts work",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/complaints/{{complaintId}}",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                "{{complaintId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"in-progress\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"status updated\", () => { pm.expect(pm.response.json().status).to.eql('in-progress'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid status \u2192 400",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/complaints/{{complaintId}}",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                "{{complaintId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"done\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tenant cannot withdraw in-progress complaint \u2192 409",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/complaints/{{complaintId}}",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                "{{complaintId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tenant raises a second complaint",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/complaints",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Wi-Fi slow\",\n  \"description\": \"Drops after 9pm.\",\n  \"priority\": \"low\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('complaint2Id', pm.response.json()._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tenant withdraws pending complaint",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/complaints/{{complaint2Id}}",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "complaints",
+                "{{complaint2Id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Dashboards (data from both services)",
+      "item": [
+        {
+          "name": "Owner stats (properties \u21d0 user-service, money \u21d0 billing-service)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/owner/stats",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "owner",
+                "stats"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"property data present\", () => { pm.expect(pm.response.json().rooms).to.eql(12); });",
+                  "pm.test(\"billing data present\", () => { pm.expect(pm.response.json().pendingPayments).to.eql(1); });",
+                  "pm.test(\"not degraded\", () => { pm.expect(pm.response.json().degraded).to.be.false; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tenant summary (property name \u21d0 user-service)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/tenant/summary",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "tenant",
+                "summary"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"property name resolved\", () => { pm.expect(pm.response.json().property).to.eql('Sunrise PG'); });",
+                  "pm.test(\"amount due is the pending bill\", () => { pm.expect(pm.response.json().amountDue).to.eql(7500); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7. Notifications (notification-service, Telegram)",
+      "description": "Events from billing-service land here. Telegram is simulated through the internal endpoint so the suite passes with or without a real bot token.",
+      "item": [
+        {
+          "name": "notification-service health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{notifyUrl}}/api/health",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('served by notification-service', () => pm.expect(pm.response.json().service).to.eql('notification-service'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "notification-service \u2192 user + billing reachable",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{notifyUrl}}/api/health/dependencies",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "api",
+                "health",
+                "dependencies"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('both reachable', () => pm.expect(pm.response.json().reachable).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tenant feed has \"new bill\" and \"resolved\" alerts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/api/notifications",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json().items.map(n => n.type); pm.test('bill.issued delivered', () => pm.expect(t).to.include('bill.issued')); pm.test('complaint.updated delivered', () => pm.expect(t).to.include('complaint.updated'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner feed has \"payment received\" and \"new repair\" alerts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/api/notifications",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json().items.map(n => n.type); pm.test('bill.paid delivered', () => pm.expect(t).to.include('bill.paid')); pm.test('complaint.created delivered', () => pm.expect(t).to.include('complaint.created'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner: Telegram status (not linked)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/api/telegram/status",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "api",
+                "telegram",
+                "status"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('not linked yet', () => pm.expect(pm.response.json().linked).to.be.false);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner: generate link code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/api/telegram/link-code",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "api",
+                "telegram",
+                "link-code"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('ownerLinkCode', pm.response.json().code); pm.test('code issued', () => pm.expect(pm.response.json().code).to.have.lengthOf(6));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tenant: generate link code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/api/telegram/link-code",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "api",
+                "telegram",
+                "link-code"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('tenantLinkCode', pm.response.json().code);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Simulate owner sending /link to the bot",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-service-key",
+                "value": "{{serviceKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/internal/telegram/simulate",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "internal",
+                "telegram",
+                "simulate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chatId\": \"{{run}}01\",\n  \"text\": \"/link {{ownerLinkCode}}\",\n  \"from\": \"Ravi\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Simulate tenant sending /link to the bot",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-service-key",
+                "value": "{{serviceKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/internal/telegram/simulate",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "internal",
+                "telegram",
+                "simulate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chatId\": \"{{run}}02\",\n  \"text\": \"/link {{tenantLinkCode}}\",\n  \"from\": \"Nila\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner: Telegram status (linked)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/api/telegram/status",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "api",
+                "telegram",
+                "status"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('linked', () => pm.expect(pm.response.json().linked).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner: send test alert",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/api/telegram/test",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "api",
+                "telegram",
+                "test"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('went through telegram channel', () => pm.expect(['sent','console']).to.include(pm.response.json().telegramStatus));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Simulate tenant free-text message \u2192 forwarded to owner",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-service-key",
+                "value": "{{serviceKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/internal/telegram/simulate",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "internal",
+                "telegram",
+                "simulate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chatId\": \"{{run}}02\",\n  \"text\": \"Can I pay on the 12th?\",\n  \"from\": \"Nila\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner feed contains the tenant message",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/api/notifications?limit=5",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('message.tenant delivered', () => pm.expect(pm.response.json().items.map(n => n.type)).to.include('message.tenant'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner: send reminders now (digest)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/api/jobs/digest",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "api",
+                "jobs",
+                "digest"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('digest ran', () => pm.expect(pm.response.json()).to.have.property('notifications'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tenant cannot run digest \u2192 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tenantToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/api/jobs/digest",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "api",
+                "jobs",
+                "digest"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner: mark all read",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/api/notifications/read-all",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "read-all"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('unread is now 0', () => pm.expect(pm.response.json().updated).to.be.a('number'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Internal events without service key \u2192 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/internal/events",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "internal",
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"bill.issued\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner: disconnect Telegram",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notifyUrl}}/api/telegram/link",
+              "host": [
+                "{{notifyUrl}}"
+              ],
+              "path": [
+                "api",
+                "telegram",
+                "link"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Internal APIs & cross-service rules",
+      "item": [
+        {
+          "name": "Internal endpoint without service key \u2192 403",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{userUrl}}/internal/users/{{tenantId}}",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "internal",
+                "users",
+                "{{tenantId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Internal: get user (as billing-service would)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-service-key",
+                "value": "{{serviceKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/internal/users/{{tenantId}}",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "internal",
+                "users",
+                "{{tenantId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"no password leaked\", () => { pm.expect(pm.response.json()).to.not.have.property('password'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Internal: batch users",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-service-key",
+                "value": "{{serviceKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/internal/users/batch",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "internal",
+                "users",
+                "batch"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ids\": [\n    \"{{tenantId}}\",\n    \"{{ownerId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"two users\", () => { pm.expect(pm.response.json().length).to.eql(2); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Internal: bill summary for property (as user-service would)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-service-key",
+                "value": "{{serviceKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/internal/bills/summary?property={{propertyId}}",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "internal",
+                "bills",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "property",
+                  "value": "{{propertyId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"one pending bill\", () => { pm.expect(pm.response.json().pendingBills).to.eql(1); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete property with unpaid bill \u2192 409 (user-service asks billing-service)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/properties/{{propertyId}}",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete pending bill",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills/{{bill2Id}}",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills",
+                "{{bill2Id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete property now succeeds",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/properties/{{propertyId}}",
+              "host": [
+                "{{userUrl}}"
+              ],
+              "path": [
+                "api",
+                "properties",
+                "{{propertyId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"checked with billing-service\", () => { pm.expect(pm.response.json().checkedWith).to.eql('billing-service'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Owner bills still listed after property removal",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billingUrl}}/api/bills",
+              "host": [
+                "{{billingUrl}}"
+              ],
+              "path": [
+                "api",
+                "bills"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test(\"placeholder for removed property\", () => { pm.expect(pm.response.json()[0].property.name).to.eql('Removed property'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "run",
+      "value": ""
+    },
+    {
+      "key": "ownerToken",
+      "value": ""
+    },
+    {
+      "key": "ownerId",
+      "value": ""
+    },
+    {
+      "key": "tenantToken",
+      "value": ""
+    },
+    {
+      "key": "tenantId",
+      "value": ""
+    },
+    {
+      "key": "propertyId",
+      "value": ""
+    },
+    {
+      "key": "billId",
+      "value": ""
+    },
+    {
+      "key": "bill2Id",
+      "value": ""
+    },
+    {
+      "key": "complaintId",
+      "value": ""
+    },
+    {
+      "key": "complaint2Id",
+      "value": ""
+    },
+    {
+      "key": "ownerLinkCode",
+      "value": ""
+    },
+    {
+      "key": "tenantLinkCode",
+      "value": ""
+    }
+  ]
+}
